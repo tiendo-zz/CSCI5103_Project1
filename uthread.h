@@ -13,14 +13,14 @@
 
 
 // function prototype
-//int uthread_create(void (*start_routine)(int), int arg);
-int uthread_create(void *(*start_routine)(void*), void *arg);
+int uthread_create(void (*start_routine)(int), int arg);
+// int uthread_create(void *(*start_routine)(void*), void *arg);
 int uthread_yield(void);
 int uthread_self(void);
 int uthread_join(int tid, void **retval);
 
-//void *f(int arg);
-void *f(void *arg);
+void *f(int arg);
+// void *f(void *arg);
 void stub(void (*func)(int), int arg);
 
 
