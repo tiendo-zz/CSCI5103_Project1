@@ -63,13 +63,13 @@ int main()
 		printf("in main, thread sp = %li\n", thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP]);
 		address_t* _pointer2;
 		_pointer2 = thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP];
-		printf("in main, rsp = %li, rsp[0] = %li\n", _pointer2, *(_pointer2) );
+		printf("in main, rsp = %li, rsp[0] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 		_pointer2++;
-		printf("in main, rsp = %li, rsp[1] = %li\n", _pointer2, *(_pointer2) );
+		printf("in main, rsp = %li, rsp[1] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 		_pointer2++;
-		printf("in main, rsp = %li, rsp[2] = %li\n", _pointer2, *(_pointer2) );
+		printf("in main, rsp = %li, rsp[2] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 		_pointer2++;
-		printf("in main, rsp = %li, rsp[3] = %li\n", _pointer2, *(_pointer2) );
+		printf("in main, rsp = %li, rsp[3] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 
 		setcontext(&(thread_list.next->thread_TCB.context));
 	}

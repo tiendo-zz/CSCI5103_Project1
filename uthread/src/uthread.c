@@ -65,28 +65,28 @@ int uthread_create(void (*start_routine)(int), int arg)
 	sigemptyset(&new_thread->context.uc_sigmask);
 
 	stack += STACK_SIZE;
-	printf("stack addr = %i\n", stack);
+	printf("stack addr = %li\n", (long int)stack);
 	
 	*(stack) = arg;	
 	stack-=sizeof(address_t)/sizeof(char);
-	printf("stack addr = %i\n", stack);
+	printf("stack addr = %li\n", (long int)stack);
 
 
 	// ((address_t) stack[0]) = start_routine;
 	
-	address_t val = start_routine;	
+	address_t val = (address_t)start_routine;	
 	memcpy(stack, &(val), 8);
 	stack-=sizeof(address_t)/sizeof(char);
-	printf("stack addr = %i\n", stack);
+	printf("stack addr = %li\n", (long int)stack);
 
 	
-	printf("RSP = %i\n", sp);
+	printf("RSP = %li\n", (long int)sp);
 
 	new_thread->context.uc_mcontext.gregs[REG_RDI] = (address_t) start_routine;
 	new_thread->context.uc_mcontext.gregs[REG_RSI] = arg;
 
 
-	printf("start routine = %i\n", start_routine);
+	printf("start routine = %li\n", (long int)start_routine);
 
 	new_thread->state = READY;
 
@@ -100,20 +100,20 @@ void stub(void (*func)(int), int arg)
 {
 	
 
-	printf("in stub, thread rsp = %li\n", thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP]);
+	printf("in stub, thread rsp = %li\n", (long int)thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP]);
 
 	address_t* _pointer2;
-	_pointer2 = thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP];
+	_pointer2 = (address_t*) thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RSP];
 	
-	printf("in stub, rsp = %li, rsp[0] = %li\n", _pointer2, *(_pointer2) );
+	printf("in stub, rsp = %li, rsp[0] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 	_pointer2++;
-	printf("in stub, rsp = %li, rsp[1] = %li\n", _pointer2, *(_pointer2) );
+	printf("in stub, rsp = %li, rsp[1] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 	_pointer2++;
-	printf("in stub, rsp = %li, rsp[2] = %li\n", _pointer2, *(_pointer2) );
+	printf("in stub, rsp = %li, rsp[2] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 	_pointer2++;
-	printf("in stub, rsp = %li, rsp[3] = %li\n", _pointer2, *(_pointer2) );
+	printf("in stub, rsp = %li, rsp[3] = %li\n", (long int)_pointer2, (long int)*(_pointer2) );
 
-	printf("in stub, rdi = %li\n", thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RDI]);
+	printf("in stub, rdi = %li\n", (long int)thread_list.next->thread_TCB.context.uc_mcontext.gregs[REG_RDI]);
 
 	(*func)(arg);
 	
