@@ -12,8 +12,10 @@ set(COMMON_OPTIMIZATION_FLAGS "-ftree-loop-im -funswitch-loops -floop-interchang
 set(DEBUG_FLAGS "-fexceptions -std=c++11 -O1 -g3")
 
 # libraries
-add_subdirectory(uthread)
+# add_subdirectory(uthread)
+add_subdirectory(ThreadScheduler)
+add_subdirectory(uthread_new)
 
 
 # test folders
-add_subdirectory(test_uthread)
+add_subdirectory(Tester)

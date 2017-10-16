@@ -1,0 +1,3 @@
+add_subdirectory(test_timer)
+add_subdirectory(test_uthread)
+add_subdirectory(test_uthread_new)
