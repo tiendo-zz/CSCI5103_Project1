@@ -25,8 +25,8 @@ void sigalrm_handler(int sig){
   
   cout << "ptr[0] - current sp" << *(_ptr) << endl; _ptr--;
   cout << "ptr[-1] - flags " << *(_ptr) << endl; _ptr--;
-  cout << "ptr[-2] - SP in main" << *(_ptr) << endl; _ptr--;
-  cout << "ptr[-3] - IP in main " << *(_ptr) << endl;
+  cout << "ptr[-2] - IP in main " << *(_ptr) << endl; _ptr--;
+  cout << "ptr[-3] - SP in main " << *(_ptr) << endl;
   
 }
 
@@ -39,8 +39,8 @@ int main(){
   
   getcontext(&maincontext);
   
-  cout << "main context sp: " << maincontext.uc_mcontext.gregs[REG_RIP] <<
-          " ip: " << maincontext.uc_mcontext.gregs[REG_RSP] << endl;
+  cout << "main context ip: " << maincontext.uc_mcontext.gregs[REG_RIP] <<
+          " sp: " << maincontext.uc_mcontext.gregs[REG_RSP] << endl;
   
   while(i == 0);
   cout << "back to main, i = " << i << endl;

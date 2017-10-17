@@ -11,6 +11,11 @@ set(COMPILATION_FLAGS "${WARNING_FLAGS} -fexceptions -frtti -std=c++11 -fmodulo-
 set(COMMON_OPTIMIZATION_FLAGS "-ftree-loop-im -funswitch-loops -floop-interchange")
 set(DEBUG_FLAGS "-fexceptions -std=c++11 -O1 -g3")
 
+
+#includes
+include_directories(/uthread_new/include/)
+include_directories(/ThreadScheduler/include/)
+
 # libraries
 # add_subdirectory(uthread)
 add_subdirectory(ThreadScheduler)

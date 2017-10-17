@@ -2,6 +2,8 @@
 #define _THREAD_CONTROL_BLOCK_
 
 #include "ucontext.h"
+#include <functional>
+#include <iostream>
 
 /** @class TCB
  *  @brief 
@@ -24,45 +26,84 @@ enum thread_state {
 
 class TCB{
 public:
-    TCB(int thread_id, ucontext context){
-    _thread_id = thread_id;
-    _context = context;
-    _state = READY;
-  }
+  TCB(int thread_id):_thread_id(thread_id) {}
+  
+  TCB(int thread_id, ucontext context):_thread_id(thread_id),
+                                       _context(context),
+                                       _state(READY){}
+  
+  TCB(int thread_id, void (*start_routine)(int), int arg, size_t stub_pc):_thread_id(thread_id),    
+                                                                          _state(READY),
+                                                                          _arg(arg){
 
-  TCB(int thread_id, void (*start_routine)(void*), void* arg){
-    _thread_id = thread_id;    
-    _state = READY;
-    _arg = arg;
+    char *stack = new char[STACK_SIZE];            
+    // size_t pc = (size_t) stub;
+    // size_t sp = (size_t) (stack + STACK_SIZE);
+    size_t sp = (size_t) (stack + STACK_SIZE - 2*sizeof(size_t)/sizeof(char));
     
-    char *stack = new char[STACK_SIZE];        
-    size_t pc = (size_t) this->stub;
-    size_t sp = (size_t) (stack + STACK_SIZE);
-    
-    _context.uc_mcontext.gregs[REG_RIP] = pc;
+    _context.uc_mcontext.gregs[REG_RIP] = stub_pc;
     _context.uc_mcontext.gregs[REG_RSP] = sp;
-    sigemptyset(_context.uc_sigmask);
+    sigemptyset(&_context.uc_sigmask);
     _context.uc_mcontext.gregs[REG_RDI] = (size_t) start_routine;
-    _context.uc_mcontext.gregs[REG_RSI] = arg;
+    _context.uc_mcontext.gregs[REG_RSI] = (size_t) arg;
+  }
+  
+  // setter
+  void assign_context(ucontext context){
+    _context = context;
+  }
+  
+  void assign_context(void (*start_routine)(int), int arg, size_t stub_pc){
+    char *stack = new char[STACK_SIZE];                
+    size_t sp = (size_t) (stack + STACK_SIZE - 2*sizeof(size_t)/sizeof(char));
+    _context.uc_mcontext.gregs[REG_RIP] = stub_pc;
+    _context.uc_mcontext.gregs[REG_RSP] = sp;    
+    sigemptyset(&_context.uc_sigmask);
+    _context.uc_mcontext.gregs[REG_RDI] = (size_t) start_routine;
+    _context.uc_mcontext.gregs[REG_RSI] = (size_t) arg;
+  }
+  
+  void set_state(thread_state state){
+    _state = state;
+  }
+  
+  // getter
+  ucontext get_context(){
+    return this->_context;
+  }
+  
+  thread_state get_state(){
+    return this->_state;
+  }
+  
+  // debugger
+  void print_context(){
+      std::cout << "TCB id: " << _thread_id 
+                << " state: " << _state 
+                << " ip: " << _context.uc_mcontext.gregs[REG_RIP] 
+                << " sp: " << _context.uc_mcontext.gregs[REG_RSP] 
+                << " di: " << _context.uc_mcontext.gregs[REG_RDI] 
+                << " si: " << _context.uc_mcontext.gregs[REG_RSI] 
+                << std::endl;
+  }
+  
+  // back to where it left
+  void thread_resume(){
+    std::cout << "starting to run stub" << std::endl;
+    setcontext(&this->_context);
   }
   
   
   ~TCB();
-
+  
+  
+  ucontext _context;
 protected:
   int _thread_id;
-  ucontext _context;
+  
   enum thread_state _state;
-  void* _arg;
+  int _arg;
   void** _retval;
-  
-  
-  
-  void stub(void (*func)(void*), void* arg)
-  {
-    (*func)(arg);    
-  }
-
 };
 
 
