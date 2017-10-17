@@ -20,7 +20,7 @@ int main(){
       " sp: " << maincontext.uc_mcontext.gregs[REG_RSP] << endl;
 
   
-  for(int i = 0; i < 1; i++){
+  for(int i = 0; i < 10; i++){
     uthread_create(&foo, i);
   }
   cout << "foo : " << (size_t) foo << endl;

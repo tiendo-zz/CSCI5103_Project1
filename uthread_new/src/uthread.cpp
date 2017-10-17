@@ -80,28 +80,14 @@ void sigalrm_handler_getmain(int sig)
 
 void sigalrm_handler_timeslice(int sig)
 {
-  std::cout << "inside handler to schedule" << std::endl;
-  
-  
+  int flag = 0;  
   ucontext handlercontext;
   getcontext(&handlercontext);
-  size_t* _ptr;
-  _ptr = (size_t*) handlercontext.uc_mcontext.gregs[REG_RBP];    
-  std::cout << "ptr[11] - IP in main " << *(_ptr+11) << std::endl;
-  std::cout << "ptr[12] - SP in main " << *(_ptr+12) << std::endl;  
-  std::cout << "ptr[13] - SP in main " << *(_ptr+13) << std::endl;  
-
   
-  _ptr = (size_t*) handlercontext.uc_mcontext.gregs[REG_RBP];
-  ucontext curr_thread_context;
-  getcontext(&curr_thread_context);
-  curr_thread_context.uc_mcontext.gregs[REG_RSP] = *(_ptr+12);// _ptr--;
-  curr_thread_context.uc_mcontext.gregs[REG_RIP] = *(_ptr+11);    
+  if(flag == 1)
+    return;
   
-  // thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context = curr_thread_context;
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context.uc_mcontext.gregs[REG_RIP] = *(_ptr+11);
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context.uc_mcontext.gregs[REG_RSP] = *(_ptr+12);
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->print_context();
+  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context = handlercontext;  
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(READY);
   
   
@@ -111,23 +97,22 @@ void sigalrm_handler_timeslice(int sig)
   }
   
   // thread switch    
-  std::cout << "_running_thread_id: " << thread_scheduler->_running_thread_id << std::endl;
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(RUNNING);
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->print_context();
+  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(RUNNING);  
   sigemptyset(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context.uc_sigmask));
-  
-
-  
+    
   signal(SIGALRM, &sigalrm_handler_timeslice);
   alarm(1);    
+    
+  flag = 1;
   setcontext(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context));
 }
 
 void stub(void (*func)(int), int arg){  
   (*func)(arg);    
-  int i = 0;
+    
+  int i = 0;  
   while(1){
-    std::cout << "inside stub ... " << ++i << std::endl;
+    std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
     usleep(500000);
   }
 }
