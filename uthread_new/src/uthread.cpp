@@ -3,6 +3,8 @@
 #include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/time.h>
 
 #define MAX_THREADS 1000
 unsigned int TOTAL_THREAD_NUMBER;
@@ -47,7 +49,7 @@ int uthread_create(void (*start_routine)(int), int arg){
   }
 }
 
-
+/*
 void sigalrm_handler_getmain(int sig)
 {
   ucontext handlercontext;
@@ -76,7 +78,7 @@ void sigalrm_handler_getmain(int sig)
   signal(SIGALRM, &sigalrm_handler_timeslice);
   alarm(1);
 }
-
+*/
 
 void sigalrm_handler_timeslice(int sig)
 {
@@ -86,6 +88,7 @@ void sigalrm_handler_timeslice(int sig)
   
   if(flag == 1)
     return;
+
   
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context = handlercontext;  
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(READY);
@@ -99,9 +102,10 @@ void sigalrm_handler_timeslice(int sig)
   // thread switch    
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(RUNNING);  
   sigemptyset(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context.uc_sigmask));
-    
-  signal(SIGALRM, &sigalrm_handler_timeslice);
-  alarm(1);    
+
+
+  //signal(SIGALRM, &sigalrm_handler_timeslice);
+  //alarm(1);    
     
   flag = 1;
   setcontext(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context));
@@ -113,6 +117,6 @@ void stub(void (*func)(int), int arg){
   int i = 0;  
   while(1){
     std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
-    usleep(500000);
+    usleep(5000000);
   }
 }

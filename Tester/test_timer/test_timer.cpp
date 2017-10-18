@@ -2,6 +2,9 @@
 #include <iostream>
 #include <signal.h>
 #include <ucontext.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/time.h>
 
 
 using namespace std;
@@ -33,8 +36,22 @@ void sigalrm_handler(int sig){
 
 int main(){
   
-  signal(SIGALRM, &sigalrm_handler);
-  alarm(1);  
+//  signal(SIGALRM, &sigalrm_handler);
+//  alarm(1); 
+
+  struct sigaction sa;
+  struct itimerval timer;
+
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = &sigalrm_handler;
+  sigaction(SIGVTALRM, &sa, NULL);
+
+  timer.it_value.tv_sec = 0;
+  timer.it_value.tv_usec = 10000; // 10ms = 10000 us
+  timer.it_interval = timer.it_value;
+
+  setitimer(ITIMER_VIRTUAL, &timer, NULL); 
+  std::cout << "config timer interrupt\n";
   
   
   getcontext(&maincontext);
@@ -43,6 +60,7 @@ int main(){
           " sp: " << maincontext.uc_mcontext.gregs[REG_RSP] << endl;
   
   while(i == 0);
+
   cout << "back to main, i = " << i << endl;
   
   return 0;
