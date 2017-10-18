@@ -92,6 +92,14 @@ public:
     std::cout << "starting to run stub" << std::endl;
     setcontext(&this->_context);
   }
+
+  void set_retval(void **retval) {
+   _retval = (void**)retval;
+  }
+
+  void** get_retval() {
+    return this->_retval;
+  }
   
   
   ~TCB();

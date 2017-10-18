@@ -4,7 +4,22 @@
 #include "ThreadScheduler.h"
 
 int uthread_create(void (*start_routine)(int), int arg);
+int uthread_yield(void);
+int uthread_self(void);
+int uthread_join(int tid, void **retval);
+void uthread_exit(void *retval);
+
+
+int uthread_init(int time_slice);
+int uthread_terminate(int tid);
+int uthread_suspend(int tid);
+int uthread_resume(int tid);
+
+
 void stub(void (*func)(int), int arg);
 void sigalrm_handler_getmain(int sig);
+
+
+ssize_t async_read(int fildes, void *buf, size_t nbytes);
 
 #endif

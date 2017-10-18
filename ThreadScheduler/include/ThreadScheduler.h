@@ -5,6 +5,7 @@
 #include <vector>
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 
 /** @class ThreadScheduler
@@ -25,7 +26,8 @@ public:
     
     void AddThread(TCB* new_thread);
     
-    void GetMainContext();
+    void EnableInterrupt(unsigned int time_slice);
+    void DisableInterrupt();
 
     unsigned int _running_thread_id;        
     std::vector<TCB*> _vector_tcb;
