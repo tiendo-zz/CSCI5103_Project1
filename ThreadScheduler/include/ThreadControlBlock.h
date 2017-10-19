@@ -86,6 +86,10 @@ public:
                 << " si: " << _context.uc_mcontext.gregs[REG_RSI] 
                 << std::endl;
   }
+
+  int get_thread_id() {
+    return this->_thread_id;
+  }
   
   // back to where it left
   void thread_resume(){

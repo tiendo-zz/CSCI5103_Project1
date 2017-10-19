@@ -6,9 +6,11 @@
 #include <string.h>
 #include <sys/time.h>
 
+using namespace std;
+
 #define MAX_THREADS 1000
 unsigned int TOTAL_THREAD_NUMBER;
-unsigned int TIME_SLICE = 10000; // default 10ms, user can change value using uthread_init()
+unsigned int TIME_SLICE = 100000; // default 10ms, user can change value using uthread_init()
 ThreadScheduler* thread_scheduler;
 
 int uthread_create(void (*start_routine)(int), int arg){
@@ -22,11 +24,14 @@ int uthread_create(void (*start_routine)(int), int arg){
     // Add the main thread
     TCB* main_thread = new TCB(TOTAL_THREAD_NUMBER++);
     thread_scheduler->AddThread(main_thread);
+    thread_scheduler->AddRunningQueue(main_thread);
     
     // Add another thread    
     
     TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++); //, start_routine, arg, (size_t) stub);    
     thread_scheduler->AddThread(new_thread);
+    thread_scheduler->AddRunningQueue(new_thread);
+
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);    
      
@@ -41,6 +46,8 @@ int uthread_create(void (*start_routine)(int), int arg){
     std::cout << "TOTAL_THREAD_NUMBER: " << TOTAL_THREAD_NUMBER << std::endl;
     TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++);    
     thread_scheduler->AddThread(new_thread);
+    thread_scheduler->AddRunningQueue(new_thread);
+
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->print_context();
@@ -102,7 +109,10 @@ int uthread_self(void) {
 
   thread_scheduler->DisableInterrupt();
 
-  tid = thread_scheduler->_running_thread_id;
+  //tid = thread_scheduler->_running_thread_id;
+  TCB* running_thread = thread_scheduler->_running_queue.front();
+
+  tid = running_thread->get_thread_id();
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
   
@@ -114,7 +124,7 @@ int uthread_join(int tid, void **retval) {
   thread_scheduler->DisableInterrupt();
 
   int err_code = 0;
-
+/*
   // check if this "tid" exists
   if (tid >= TOTAL_THREAD_NUMBER)
     err_code = 1;
@@ -124,6 +134,26 @@ int uthread_join(int tid, void **retval) {
   }
 
   retval = thread_scheduler->_vector_tcb[tid]->get_retval();
+*/
+
+  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
+
+  while (it != thread_scheduler->_vector_tcb.end()) {
+    if ((*it)->get_thread_id() == tid)
+      break;
+    else
+      it++;
+  }
+
+  // cannot find thread_id in vector_tcb
+  if (it == thread_scheduler->_vector_tcb.end())
+    err_code = 1;
+  else {
+    while ((*it)->get_state() != TERMINATED)
+      uthread_yield(); // while it waits, other threads can still run
+
+    retval = (*it)->get_retval();
+  }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
   
@@ -132,8 +162,20 @@ int uthread_join(int tid, void **retval) {
 
 
 void uthread_exit(void *retval) {
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(TERMINATED);
-  thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_retval(&retval);
+  thread_scheduler->DisableInterrupt();
+
+  //thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(TERMINATED);
+  //thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_retval(&retval);
+  TCB* running_thread = thread_scheduler->_running_queue.front();
+
+  running_thread->set_state(TERMINATED);
+  running_thread->set_retval(&retval);
+
+  //thread_scheduler->_running_queue.pop();
+
+  thread_scheduler->AddTerminatedQueue(running_thread);
+
+  thread_scheduler->EnableInterrupt(TIME_SLICE);
 }
 
 
@@ -148,7 +190,7 @@ int uthread_terminate(int tid) {
   thread_scheduler->DisableInterrupt();
 
   int err_code = 0;
-
+/*
   // check if this "tid" exists
   if (tid >= TOTAL_THREAD_NUMBER)
     err_code = 1;
@@ -158,6 +200,24 @@ int uthread_terminate(int tid) {
   }
   else
     thread_scheduler->_vector_tcb[tid]->set_state(TERMINATED);
+*/
+
+  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
+
+  while (it != thread_scheduler->_vector_tcb.end()) {
+    if ((*it)->get_thread_id() == tid)
+      break;
+    else
+      it++;
+  }
+
+  // cannot find thread_id in vector_tcb
+  if (it == thread_scheduler->_vector_tcb.end())
+    err_code = 1;
+  else {
+    (*it)->set_state(TERMINATED);
+    thread_scheduler->AddTerminatedQueue(running_thread);
+  }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 
@@ -169,7 +229,7 @@ int uthread_suspend(int tid) {
   thread_scheduler->DisableInterrupt();
 
   int err_code = 0;
-
+/*
   // check if this "tid" exists
   if (tid >= TOTAL_THREAD_NUMBER)
     err_code = 1;
@@ -179,6 +239,25 @@ int uthread_suspend(int tid) {
   }
   else
     thread_scheduler->_vector_tcb[tid]->set_state(SUSPENDED);
+*/
+
+  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
+
+  while (it != thread_scheduler->_vector_tcb.end()) {
+    if ((*it)->get_thread_id() == tid)
+      break;
+    else
+      it++;
+  }
+
+  // cannot find thread_id in vector_tcb
+  if (it == thread_scheduler->_vector_tcb.end()) {
+    cout << "cannot resume terminated thread\n";
+    err_code = 1;
+  }
+  else {
+    (*it)->set_state(SUSPENDED);
+  }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 
@@ -191,7 +270,7 @@ int uthread_resume(int tid) {
   thread_scheduler->DisableInterrupt();
 
   int err_code = 0;
-
+/*
   // check if this "tid" exists
   if (tid >= TOTAL_THREAD_NUMBER)
     err_code = 1;
@@ -201,6 +280,24 @@ int uthread_resume(int tid) {
   }
   else
     thread_scheduler->_vector_tcb[tid]->set_state(READY);
+*/
+  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
+
+  while (it != thread_scheduler->_vector_tcb.end()) {
+    if ((*it)->get_thread_id() == tid)
+      break;
+    else
+      it++;
+  }
+
+  // cannot find thread_id in vector_tcb
+  if (it == thread_scheduler->_vector_tcb.end())
+    err_code = 1;
+  else {
+    (*it)->set_state(READY);
+
+    thread_scheduler->AddRunningQueue(*it);
+  }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 
@@ -237,7 +334,33 @@ void sigalrm_handler_timeslice(int sig)
   if(flag == 1)
     return;
 
+  thread_scheduler->DisableInterrupt(); 
+ 
+
+  // current running thread
+  TCB* current_thread = thread_scheduler->_running_queue.front();
   
+  current_thread->_context = handlercontext;
+  current_thread->set_state(READY);
+
+  thread_scheduler->_running_queue.pop();
+
+  // push running thread to back of the queue
+  thread_scheduler->AddRunningQueue(current_thread);
+
+  // grab the next READY thread
+  TCB* next_thread = thread_scheduler->_running_queue.front();
+
+  while (next_thread->get_state() != READY) {
+    thread_scheduler->_running_queue.pop();
+
+    next_thread = thread_scheduler->_running_queue.front();
+  }
+
+  next_thread->set_state(RUNNING);
+  sigemptyset(&(next_thread->_context.uc_sigmask));
+
+/*
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context = handlercontext;  
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(READY);
   
@@ -253,17 +376,22 @@ void sigalrm_handler_timeslice(int sig)
   	if (thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->get_state() == READY)
 	  break;
   }
+
   
   // thread switch    
   thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->set_state(RUNNING);  
   sigemptyset(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context.uc_sigmask));
-
+*/
 
   //signal(SIGALRM, &sigalrm_handler_timeslice);
   //alarm(1);    
     
   flag = 1;
-  setcontext(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context));
+
+  thread_scheduler->EnableInterrupt(TIME_SLICE);
+
+  //setcontext(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context));
+  setcontext(&(next_thread->_context));
 }
 
 
@@ -272,7 +400,9 @@ void stub(void (*func)(int), int arg){
     
   int i = 0;  
   while(1){
-    std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
-    usleep(5000000);
+    //std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
+    TCB* current_thread = thread_scheduler->_running_queue.front();
+    std::cout << "inside thread " << current_thread->get_thread_id() << std::endl;
+    usleep(500000);
   }
 }

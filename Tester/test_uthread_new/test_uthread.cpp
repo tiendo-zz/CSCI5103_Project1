@@ -47,7 +47,11 @@ int main(){
   int i = 0;
   while(1){
     cout << "inside main ... " << ++i << endl;
-    usleep(5000000);
+    if (i == 5)
+	uthread_terminate(5);
+    if (i == 10)
+        uthread_resume(5);
+    usleep(500000);
   }
   
   return 0;
