@@ -47,10 +47,15 @@ int main(){
   int i = 0;
   while(1){
     cout << "inside main ... " << ++i << endl;
+
+    void **retval;
+    uthread_join(10, retval);
+
     if (i == 5)
-	uthread_terminate(5);
+	uthread_suspend(5);
     if (i == 10)
         uthread_resume(5);
+
     usleep(500000);
   }
   
