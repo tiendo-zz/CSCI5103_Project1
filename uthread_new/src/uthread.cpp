@@ -10,7 +10,7 @@ using namespace std;
 
 #define MAX_THREADS 1000
 unsigned int TOTAL_THREAD_NUMBER;
-unsigned int TIME_SLICE = 100000; // default 10ms, user can change value using uthread_init()
+unsigned int TIME_SLICE = 10000; // default 10ms, user can change value using uthread_init()
 ThreadScheduler* thread_scheduler;
 
 int uthread_create(void (*start_routine)(int), int arg){
@@ -133,7 +133,7 @@ int uthread_join(int tid, void **retval) {
 }
 
 
-// user is not allowed to call this function
+// this functions is put at the end of stub function to terminate thread
 void uthread_exit(void *retval) {
   thread_scheduler->DisableInterrupt();
 
@@ -221,7 +221,12 @@ int uthread_suspend(int tid) {
     err_code = 1;
   }
   else {
-    (*it)->set_state(SUSPENDED);
+    // just to check if thread is already terminated
+    // if user hasn't called uthread_join, terminated thread_TCB is still on vector_tcb
+    if (((*it)->get_state() != TERMINATED) && ((*it)->get_state() != SUSPENDED))  {
+      (*it)->set_state(SUSPENDED);
+      thread_scheduler->AddSuspendedQueue(*it);
+    }
 
     // is the thread suspending itself?
     TCB* running_thread = thread_scheduler->_running_queue.front();
@@ -272,19 +277,38 @@ int uthread_resume(int tid) {
   return err_code;
 }
 
+
 /*
+void aio_handler(int signo, siginfo_t *info, void *context) {
+  thread_scheduler->DisableInterrupt();
+
+  cout << "I/O ready\n";
+
+  thread_scheduler->EnableInterrupt(TIME_SLICE);
+}
+
+
 ssize_t async_read(int fildes, void *buf, size_t nbytes) {
   thread_scheduler->DisableInterrupt();
   
   // set the O_ASYNC file status flag on the file descriptor
-  fcntl(fildes, F_SETFL);
+  int flags = fcntl(fildes, F_GETFL, 0);
+  fcntl(fildes, F_SETFL, flags | O_ASYNC | O_NONBLOCK);
+  //fcntl(fildes, F_SETSIG, 0);
+
+  cout << "fd = " << fildes << endl;
 
   struct sigaction sa;
-  struct itimerval timer;
 
   memset(&sa, 0, sizeof(sa));
-  sa.sa_handler = &async_IO;
-  sigaction(SIGIO, &sa, NULL);  
+
+  sa.sa_sigaction = aio_handler;
+  sa.sa_flags = SA_SIGINFO;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGIO, &sa, NULL);
+  
+
+  cout << "in async read\n";
 
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
@@ -308,16 +332,15 @@ void sigalrm_handler_timeslice(int sig)
   TCB* current_thread = thread_scheduler->_running_queue.front();
   thread_scheduler->_running_queue.pop();
   
+  current_thread->_context = handlercontext;
+
   // has user changed the state of this thread?
   if (current_thread->get_state() == RUNNING) {
-    current_thread->_context = handlercontext;
     current_thread->set_state(READY);
     // push running thread to back of the queue
     thread_scheduler->AddRunningQueue(current_thread);
   }
-  else if (current_thread->get_state() == SUSPENDED) {
-    thread_scheduler->AddSuspendedQueue(current_thread);
-  }
+
 
 
   // grab the next READY thread
@@ -325,10 +348,6 @@ void sigalrm_handler_timeslice(int sig)
 
   while (next_thread->get_state() != READY) {
     thread_scheduler->_running_queue.pop();
-
-    if (next_thread->get_state() == SUSPENDED) {
-      thread_scheduler->AddSuspendedQueue(next_thread);
-    }
 
     next_thread = thread_scheduler->_running_queue.front();
   }
@@ -338,6 +357,18 @@ void sigalrm_handler_timeslice(int sig)
 
     
   flag = 1;
+
+  // this is to check if any suspended thread is terminated
+  for (int i = 0; i < thread_scheduler->_suspended_queue.size(); i++) {
+    TCB* temp_thread = thread_scheduler->_suspended_queue.front();
+    thread_scheduler->_suspended_queue.pop();
+
+    // if it is still suspended, put it back to the queue
+    // if terminated, just remove it completely
+    // uthread_join will remove the terminated thread from vector_tcb
+    if (temp_thread->get_state() == SUSPENDED)
+      thread_scheduler->AddSuspendedQueue(temp_thread);
+  }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 

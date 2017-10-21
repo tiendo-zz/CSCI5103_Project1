@@ -1,8 +1,12 @@
 #include "uthread.h"
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 
 
@@ -19,7 +23,9 @@ int main(){
   ucontext maincontext;
   getcontext(&maincontext);
 
-/*
+  uthread_init(100000);
+
+
   struct sigaction sa;
   struct itimerval timer;
 
@@ -32,7 +38,7 @@ int main(){
   timer.it_interval = timer.it_value;
 
   setitimer(ITIMER_VIRTUAL, &timer, NULL);
-*/
+
 
 
   cout << "main context ip: " << maincontext.uc_mcontext.gregs[REG_RIP] <<
@@ -58,6 +64,25 @@ int main(){
 
     usleep(500000);
   }
+
+
+
+
+/*
+  uthread_create(&foo, 1);
+
+  int fd = open("./input.txt", O_RDONLY);
+  char *buf;
+
+  buf = (char*)malloc (100 * sizeof(char));
+
+  //read(fd, buf, 100);
+  async_read(fd, buf, 100);
+
+  while (1);
+
+  //cout << buf << endl;
+*/
   
   return 0;
 }
