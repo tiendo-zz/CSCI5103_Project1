@@ -6,9 +6,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-
-struct aiocb my_aiocb;
-
 using namespace std;
 
 #define MAX_THREADS 1000
@@ -282,7 +279,8 @@ int uthread_resume(int tid) {
 
 
 void aio_completion_handler( int signo, siginfo_t *info, void *context ){    
-  struct aiocb *req;   
+  struct aiocb *req;     
+  
   
   /* Ensure it's our signal */
   if (info->si_signo == SIGIO) {    
@@ -304,8 +302,9 @@ ssize_t async_read(int fildes, void *buf, size_t nbytes){
   ssize_t file_finish = 0;
   
   int ret;  
-  struct sigaction sig_act;
-
+  struct sigaction sig_act;  
+  struct aiocb my_aiocb;
+  
   /* Set up the signal handler */
   sigemptyset(&sig_act.sa_mask);
   sig_act.sa_flags = SA_SIGINFO;
