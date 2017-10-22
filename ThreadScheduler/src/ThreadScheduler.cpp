@@ -33,10 +33,6 @@ void ThreadScheduler::AddSuspendedQueue(TCB* new_thread) {
 }
 
 
-void ThreadScheduler::AddTerminatedQueue(TCB* new_thread) {  
-  _terminated_queue.push(new_thread);
-}
-
 
 int ThreadScheduler::find_thread_id(int tid) {
   int i;

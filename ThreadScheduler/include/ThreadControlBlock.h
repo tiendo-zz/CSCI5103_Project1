@@ -33,13 +33,12 @@ public:
                                        _context(context),
                                        _state(READY){}
   
-  TCB(int thread_id, void (*start_routine)(int), int arg, size_t stub_pc):_thread_id(thread_id),    
+  TCB(int thread_id, void *(*start_routine)(void*), void *arg, size_t stub_pc):_thread_id(thread_id),    
                                                                           _state(READY),
                                                                           _arg(arg){
 
     char *stack = new char[STACK_SIZE];            
-    // size_t pc = (size_t) stub;
-    // size_t sp = (size_t) (stack + STACK_SIZE);
+
     size_t sp = (size_t) (stack + STACK_SIZE - 2*sizeof(size_t)/sizeof(char));
     
     _context.uc_mcontext.gregs[REG_RIP] = stub_pc;
@@ -54,7 +53,7 @@ public:
     _context = context;
   }
   
-  void assign_context(void (*start_routine)(int), int arg, size_t stub_pc){
+  void assign_context(void *(*start_routine)(void*), void *arg, size_t stub_pc){
     char *stack = new char[STACK_SIZE];                
     size_t sp = (size_t) (stack + STACK_SIZE - 2*sizeof(size_t)/sizeof(char));
     _context.uc_mcontext.gregs[REG_RIP] = stub_pc;
@@ -116,7 +115,7 @@ protected:
   int _thread_id;
   
   enum thread_state _state;
-  int _arg;
+  void *_arg;
   void** _retval;
 };
 

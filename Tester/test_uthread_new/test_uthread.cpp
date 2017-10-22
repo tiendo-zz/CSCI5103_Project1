@@ -12,8 +12,8 @@
 
 using namespace std;
 
-void foo(int arg){
-  cout << "Hello " << arg << endl; 
+void *foo(void *arg){
+  cout << "Hello " << *((int*)arg) << endl; 
 }
 
 
@@ -46,22 +46,29 @@ int main(){
 
   
   for(int i = 0; i < 10; i++){
-    uthread_create(&foo, i);
+    uthread_create(&foo, &i);
   }
   cout << "foo : " << (size_t) foo << endl;
   cout << "back in main" << endl;       
   int i = 0;
+
+  uthread_suspend(3);
+  uthread_resume(3);
+
+
   while(1){
     cout << "inside main ... " << ++i << endl;
 
     void **retval;
+
     uthread_join(10, retval);
 
     if (i == 5)
 	uthread_suspend(5);
-    if (i == 10)
+    if (i == 10) {
         uthread_resume(5);
-
+        //uthread_resume(3);
+    }
     usleep(500000);
   }
 

@@ -13,7 +13,7 @@ unsigned int TOTAL_THREAD_NUMBER;
 unsigned int TIME_SLICE = 10000; // default 10ms, user can change value using uthread_init()
 ThreadScheduler* thread_scheduler;
 
-int uthread_create(void (*start_routine)(int), int arg){
+int uthread_create(void *(*start_routine)(void*), void *arg){
   
   // disable timer interrupt
   thread_scheduler->DisableInterrupt();
@@ -42,10 +42,7 @@ int uthread_create(void (*start_routine)(int), int arg){
   } else if(TOTAL_THREAD_NUMBER == MAX_THREADS){
     assert(TOTAL_THREAD_NUMBER == MAX_THREADS && "thread number reachs max. value");
   } else {
-    // Add new thread
-    // TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++, start_routine, arg, (size_t) stub);
-    // thread_scheduler->AddThread(new_thread);
-    
+    // Add new thread    
     std::cout << "_running_thread_id: " << thread_scheduler->_running_thread_id << std::endl;
     std::cout << "TOTAL_THREAD_NUMBER: " << TOTAL_THREAD_NUMBER << std::endl;
     TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++);    
@@ -117,7 +114,6 @@ int uthread_join(int tid, void **retval) {
   }
   else { // found thread in vector_tcb, needs to wait until thread is terminated
       while ((*it)->get_state() != TERMINATED) {
-        cout << "main waiting for 10 to terminate\n";
         uthread_yield(); // while it waits, other threads can still run
       }
 
@@ -225,7 +221,6 @@ int uthread_suspend(int tid) {
     // if user hasn't called uthread_join, terminated thread_TCB is still on vector_tcb
     if (((*it)->get_state() != TERMINATED) && ((*it)->get_state() != SUSPENDED))  {
       (*it)->set_state(SUSPENDED);
-      thread_scheduler->AddSuspendedQueue(*it);
     }
 
     // is the thread suspending itself?
@@ -252,25 +247,27 @@ int uthread_resume(int tid) {
     return err_code;
   }
 
-  TCB* resume_thread;
 
-  // find thread_id in suspended_queue
-  for (i = 0; i < thread_scheduler->_suspended_queue.size(); i++) {
-    resume_thread = thread_scheduler->_suspended_queue.front();
-    thread_scheduler->_suspended_queue.pop();
+  // find thread_id in _vector_tcb
+  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
 
-    // is this the thread we want to resume?
-    if (resume_thread->get_thread_id() == tid) {
-      resume_thread->set_state(READY);
-      thread_scheduler->AddRunningQueue(resume_thread);
-      err_code = 0;
+  while (it != thread_scheduler->_vector_tcb.end()) {
+    if ((*it)->get_thread_id() == tid)
       break;
-    }
-    else { // put it back to end of _suspended_queue
-      thread_scheduler->AddSuspendedQueue(resume_thread);
-      err_code = 1;
-    }
+    it++;
   }
+
+  // cannot find thread_id in vector_tcb
+  // thread_id is already terminated or doesn't exist
+  if (it == thread_scheduler->_vector_tcb.end()) {
+    err_code = 1;
+  }
+  else { // only need to change state, thread scheduler will put it back to RunningQueue
+    if ((*it)->get_state() == SUSPENDED)
+      (*it)->set_state(READY);
+  }
+
+
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 
@@ -360,6 +357,8 @@ void sigalrm_handler_timeslice(int sig)
     // push running thread to back of the queue
     thread_scheduler->AddRunningQueue(current_thread);
   }
+  else if (current_thread->get_state() == SUSPENDED)
+    thread_scheduler->AddSuspendedQueue(current_thread);
 
 
 
@@ -368,6 +367,9 @@ void sigalrm_handler_timeslice(int sig)
 
   while (next_thread->get_state() != READY) {
     thread_scheduler->_running_queue.pop();
+
+    if (next_thread->get_state() == SUSPENDED)
+      thread_scheduler->AddSuspendedQueue(next_thread);
 
     next_thread = thread_scheduler->_running_queue.front();
   }
@@ -388,6 +390,8 @@ void sigalrm_handler_timeslice(int sig)
     // uthread_join will remove the terminated thread from vector_tcb
     if (temp_thread->get_state() == SUSPENDED)
       thread_scheduler->AddSuspendedQueue(temp_thread);
+    else if (temp_thread->get_state() == READY) // this condition means a thread has been resumed, put it back to Running Queue
+      thread_scheduler->AddRunningQueue(temp_thread);
   }
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
@@ -397,7 +401,7 @@ void sigalrm_handler_timeslice(int sig)
 }
 
 
-void stub(void (*func)(int), int arg){  
+void stub(void (*func)(void*), void *arg){  
   (*func)(arg);    
     
   int i = 0;  
@@ -412,9 +416,13 @@ void stub(void (*func)(int), int arg){
     if (tid == 9 && i == 10)
       uthread_terminate(10);
 
+    //if (tid == 3 && i == 5)
+      //uthread_suspend(3);
     //if (tid == 10)
       //uthread_exit(0);
 
     usleep(500000);
   }
+
+  uthread_exit(0);
 }

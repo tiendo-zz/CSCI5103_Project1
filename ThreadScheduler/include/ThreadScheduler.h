@@ -25,7 +25,7 @@ public:
     void AddThread(TCB* new_thread);
     void AddRunningQueue(TCB* new_thread);
     void AddSuspendedQueue(TCB* new_thread);
-    void AddTerminatedQueue(TCB* new_thread);
+
     void AssignFileSize(int fileid, ssize_t filesize);
     
     void EnableInterrupt(unsigned int time_slice);
@@ -40,14 +40,13 @@ public:
 
     std::queue<TCB*> _running_queue;
     std::queue<TCB*> _suspended_queue;
-    std::queue<TCB*> _terminated_queue;
 
 private:
     std::map<int, TCB*> _fildes_TCB;
 
 };
 
-void stub(void (*func)(int), int arg);
+void stub(void (*func)(void*), void *arg);
 int thread_switch(ThreadScheduler* ts, int num);
 void sigalrm_handler_getmain(int sig);
 void sigalrm_handler_timeslice(int sig);
