@@ -4,6 +4,7 @@
 #include "ucontext.h"
 #include <functional>
 #include <iostream>
+#include <unistd.h>
 
 /** @class TCB
  *  @brief 
@@ -110,6 +111,7 @@ public:
   
   
   ucontext _context;
+  ssize_t _file_size;
 protected:
   int _thread_id;
   

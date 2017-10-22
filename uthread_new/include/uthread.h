@@ -16,10 +16,6 @@ int uthread_suspend(int tid);
 int uthread_resume(int tid);
 
 
-void stub(void (*func)(int), int arg);
-void sigalrm_handler_getmain(int sig);
-
-
 ssize_t async_read(int fildes, void *buf, size_t nbytes);
 
 #endif

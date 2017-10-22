@@ -88,3 +88,22 @@ void ThreadScheduler::DisableInterrupt()
 
   setitimer(ITIMER_REAL, &timer, NULL);
 } 
+
+
+void ThreadScheduler::AssignFileIdToCurrentThread(int fileid)
+{ 
+  _fildes_TCB[fileid] = _running_queue.front();
+}
+
+void ThreadScheduler::AssignFileSize(int fileid, ssize_t filesize)
+{
+  std::map<int, TCB*>::iterator it;
+  it = _fildes_TCB.find(fileid);
+  it->second->_file_size = filesize;
+}
+int ThreadScheduler::GetThreadIdFromFileId(int fileid)
+{
+  std::map<int, TCB*>::iterator it;
+  it = _fildes_TCB.find(fileid);
+  return it->second->get_thread_id();
+}

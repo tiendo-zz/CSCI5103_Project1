@@ -5,3 +5,4 @@ add_subdirectory(test_uthread_new)
 
 include_directories(../uthread_new/include/)
 include_directories(../ThreadScheduler/include/)
+add_subdirectory(test_io_interrupt)

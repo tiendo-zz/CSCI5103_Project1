@@ -6,6 +6,9 @@
 #include <string.h>
 #include <sys/time.h>
 
+
+struct aiocb my_aiocb;
+
 using namespace std;
 
 #define MAX_THREADS 1000
@@ -54,7 +57,7 @@ int uthread_create(void (*start_routine)(int), int arg){
 
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);
-    thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->print_context();
+    // thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->print_context();
   }
 
 
@@ -278,44 +281,62 @@ int uthread_resume(int tid) {
 }
 
 
-/*
-void aio_handler(int signo, siginfo_t *info, void *context) {
-  thread_scheduler->DisableInterrupt();
-
-  cout << "I/O ready\n";
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
+void aio_completion_handler( int signo, siginfo_t *info, void *context ){    
+  struct aiocb *req;   
+  
+  /* Ensure it's our signal */
+  if (info->si_signo == SIGIO) {    
+    req = (struct aiocb *)info->si_value.sival_ptr;
+ 
+    /* Did the request complete? */
+    if (aio_error( req ) == 0) {            
+      
+      /* Request completed successfully, get the return status */
+      int file_size = aio_return( req );
+      thread_scheduler->AssignFileSize(req->aio_fildes, file_size);
+      uthread_resume(thread_scheduler->GetThreadIdFromFileId(req->aio_fildes));      
+    }
+  }     
+  return;
 }
 
-
-ssize_t async_read(int fildes, void *buf, size_t nbytes) {
-  thread_scheduler->DisableInterrupt();
+ssize_t async_read(int fildes, void *buf, size_t nbytes){
+  ssize_t file_finish = 0;
   
-  // set the O_ASYNC file status flag on the file descriptor
-  int flags = fcntl(fildes, F_GETFL, 0);
-  fcntl(fildes, F_SETFL, flags | O_ASYNC | O_NONBLOCK);
-  //fcntl(fildes, F_SETSIG, 0);
+  int ret;  
+  struct sigaction sig_act;
 
-  cout << "fd = " << fildes << endl;
-
-  struct sigaction sa;
-
-  memset(&sa, 0, sizeof(sa));
-
-  sa.sa_sigaction = aio_handler;
-  sa.sa_flags = SA_SIGINFO;
-  sigemptyset(&sa.sa_mask);
-  sigaction(SIGIO, &sa, NULL);
+  /* Set up the signal handler */
+  sigemptyset(&sig_act.sa_mask);
+  sig_act.sa_flags = SA_SIGINFO;
+  sig_act.sa_sigaction = aio_completion_handler;
+ 
+ 
+  /* Set up the AIO request */
+  bzero( (char *)&my_aiocb, sizeof(struct aiocb) );
+  my_aiocb.aio_fildes = fildes;
+  my_aiocb.aio_buf = buf;
+  my_aiocb.aio_nbytes = nbytes;
+  my_aiocb.aio_offset = 0;
+ 
+  /* Link the AIO request with the Signal Handler */
+  my_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+  my_aiocb.aio_sigevent.sigev_signo = SIGIO;
+  my_aiocb.aio_sigevent.sigev_value.sival_ptr = &my_aiocb;
+ 
+  /* Map the Signal to the Signal Handler */
+  ret = sigaction( SIGIO, &sig_act, NULL );  
+  ret = aio_read( &my_aiocb );  
   
+  // Assign file descriptor to the thread_id  
+  thread_scheduler->AssignFileIdToCurrentThread(fildes);
+  
+  // suspend my thread immediately
+  int current_thread_id = thread_scheduler->_running_queue.front()->get_thread_id();
+  uthread_suspend(current_thread_id);
 
-  cout << "in async read\n";
-
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
-  return 0;
+  return thread_scheduler->_running_queue.front()->_file_size;
 }
-*/
-
 
 void sigalrm_handler_timeslice(int sig)
 {
