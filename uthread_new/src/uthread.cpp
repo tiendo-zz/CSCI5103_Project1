@@ -405,6 +405,7 @@ void stub(void (*func)(void*), void *arg){
   (*func)(arg);    
     
   int i = 0;  
+
   while(1){
     i++;
     //std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
@@ -413,14 +414,17 @@ void stub(void (*func)(void*), void *arg){
 
     std::cout << "inside thread " << tid << std::endl;
     
-    if (tid == 9 && i == 10)
+    if (tid == 9 && i == 10) {
       uthread_terminate(10);
+      uthread_resume(3);
+    }
 
-    //if (tid == 3 && i == 5)
-      //uthread_suspend(3);
-    //if (tid == 10)
-      //uthread_exit(0);
+    if (tid == 3 && i == 5)
+      uthread_suspend(3);
 
+
+    if (i == 15)
+      break;
     usleep(500000);
   }
 

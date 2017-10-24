@@ -23,22 +23,9 @@ int main(){
   ucontext maincontext;
   getcontext(&maincontext);
 
+
+  // change time slice to 100ms
   uthread_init(100000);
-
-
-  struct sigaction sa;
-  struct itimerval timer;
-
-  memset(&sa, 0, sizeof(sa));
-  sa.sa_handler = &sigalrm_handler_timeslice;
-  sigaction(SIGVTALRM, &sa, NULL);
-
-  timer.it_value.tv_sec = 0;
-  timer.it_value.tv_usec = 10000; // 10ms = 10000 us
-  timer.it_interval = timer.it_value;
-
-  setitimer(ITIMER_VIRTUAL, &timer, NULL);
-
 
 
   cout << "main context ip: " << maincontext.uc_mcontext.gregs[REG_RIP] <<
@@ -52,9 +39,6 @@ int main(){
   cout << "back in main" << endl;       
   int i = 0;
 
-  uthread_suspend(3);
-  uthread_resume(3);
-
 
   while(1){
     cout << "inside main ... " << ++i << endl;
@@ -67,29 +51,14 @@ int main(){
 	uthread_suspend(5);
     if (i == 10) {
         uthread_resume(5);
-        //uthread_resume(3);
     }
+
+    if (i == 15)
+      break;
+
     usleep(500000);
   }
 
-
-
-
-/*
-  uthread_create(&foo, 1);
-
-  int fd = open("./input.txt", O_RDONLY);
-  char *buf;
-
-  buf = (char*)malloc (100 * sizeof(char));
-
-  //read(fd, buf, 100);
-  async_read(fd, buf, 100);
-
-  while (1);
-
-  //cout << buf << endl;
-*/
   
   return 0;
 }
