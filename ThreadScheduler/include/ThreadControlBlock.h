@@ -22,7 +22,8 @@ enum thread_state {
   READY,
   RUNNING,
   SUSPENDED,
-  TERMINATED
+  TERMINATED,
+  FINISHED
 };
 
 class TCB{
@@ -105,15 +106,16 @@ public:
     return this->_retval;
   }
   
-  
-  ~TCB();
+  // delete pointers that never access again
+  ~TCB(){
+    
+  }
   
   
   ucontext _context;
   ssize_t _file_size;
 protected:
-  int _thread_id;
-  
+  int _thread_id;  
   enum thread_state _state;
   void *_arg;
   void** _retval;

@@ -9,57 +9,55 @@
 using namespace std;
 
 #define MAX_THREADS 1000
-unsigned int TOTAL_THREAD_NUMBER;
+#define MIN_TIME_SLICE 1000 // 1msec
+
+static unsigned int THREAD_ID;
+static unsigned int TOTAL_THREAD_NUMBER; // this variable must be atomic, when this changes, interript must be disabled
 unsigned int TIME_SLICE = 10000; // default 10ms, user can change value using uthread_init()
 ThreadScheduler* thread_scheduler;
 
-int uthread_create(void *(*start_routine)(void*), void *arg){
-  
-  // disable timer interrupt
-  thread_scheduler->DisableInterrupt();
+int uthread_create(void *(*start_routine)(void*), void *arg){   
 
-  if(TOTAL_THREAD_NUMBER == 0){
+  if(THREAD_ID == 0){
     thread_scheduler = new ThreadScheduler();
     
     // Add the main thread
-    TCB* main_thread = new TCB(TOTAL_THREAD_NUMBER++);
+    TCB* main_thread = new TCB(THREAD_ID++); TOTAL_THREAD_NUMBER++;
 
     // set main thread state to running
     main_thread->set_state(RUNNING);
 
     thread_scheduler->AddThread(main_thread);
-    thread_scheduler->AddRunningQueue(main_thread);
+    thread_scheduler->AddReadyQueue(main_thread);
     
     // Add another thread    
     
-    TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++); //, start_routine, arg, (size_t) stub);    
+    TCB* new_thread = new TCB(THREAD_ID++); TOTAL_THREAD_NUMBER++;
     thread_scheduler->AddThread(new_thread);
-    thread_scheduler->AddRunningQueue(new_thread);
+    thread_scheduler->AddReadyQueue(new_thread);
 
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);    
      
   } else if(TOTAL_THREAD_NUMBER == MAX_THREADS){
     assert(TOTAL_THREAD_NUMBER == MAX_THREADS && "thread number reachs max. value");
-  } else {
+  } else {    
+    // disable timer interrupt
+    // BUG: if a thread keeps calling thread create, no other can run, but MAX thread will partially fix it
+    thread_scheduler->DisableInterrupt();
+    
     // Add new thread    
-    std::cout << "_running_thread_id: " << thread_scheduler->_running_thread_id << std::endl;
-    std::cout << "TOTAL_THREAD_NUMBER: " << TOTAL_THREAD_NUMBER << std::endl;
-    TCB* new_thread = new TCB(TOTAL_THREAD_NUMBER++);    
+    TCB* new_thread = new TCB(THREAD_ID++);    TOTAL_THREAD_NUMBER++;
     thread_scheduler->AddThread(new_thread);
-    thread_scheduler->AddRunningQueue(new_thread);
+    thread_scheduler->AddReadyQueue(new_thread);
 
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);
-    // thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->print_context();
   }
 
-
-  //enable timer interrupt
+  // enable timer interrupt
   thread_scheduler->EnableInterrupt(TIME_SLICE);
 }
-
-
 
 
 int uthread_yield(void) {
@@ -72,68 +70,54 @@ int uthread_yield(void) {
 }
 
 
-int uthread_self(void) {
-  int tid;
-
-  thread_scheduler->DisableInterrupt();
-
-  // grab info of current thread
-  TCB* running_thread = thread_scheduler->_running_queue.front();
-
-  tid = running_thread->get_thread_id();
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
-  
-  return tid;
+int uthread_self(void) {  
+  return thread_scheduler->GetCurrentThread()->get_thread_id();
 }
 
 
 // IMPORTANT NOTE: ONLY UTHREAD_JOIN REMOVE THE THREAD TCB FROM _VECTOR_TCB
-int uthread_join(int tid, void **retval) {
-  thread_scheduler->DisableInterrupt();
-
-  int err_code = 0;
-
-
-  if (tid == 0) { // cannot join "main" thread
-    err_code = 1;
-    return err_code;
+int uthread_join(int tid, void **retval) {  
+  if (tid == 0) { // cannot join "main" thread    
+    return -1;
   }
-
-  vector<TCB*>::iterator it = thread_scheduler->_vector_tcb.begin();
-
-  while (it != thread_scheduler->_vector_tcb.end()) {
-    if ((*it)->get_thread_id() == tid)
-      break;
-    it++;
-  }
-
+  
+  TCB* joining_thread = thread_scheduler->FindThread(tid);
+  
   // cannot find thread_id in vector_tcb means this thread_id does not exist or already terminated
-  if (it == thread_scheduler->_vector_tcb.end()) {
-    err_code = 1;
+  if (joining_thread == NULL) {
+    return -1;
   }
   else { // found thread in vector_tcb, needs to wait until thread is terminated
-      while ((*it)->get_state() != TERMINATED) {
+    
+      // BUG: what if somehow joining_thread is deleted by the thread yield --> need assumption
+      while (joining_thread && joining_thread->get_state() != TERMINATED) {
         uthread_yield(); // while it waits, other threads can still run
+        usleep(500); // spinning a while hopefully it's finished before switch thread
       }
-
-      retval = (*it)->get_retval();
-      // remove terminated thread from vector_tcb
-      thread_scheduler->_vector_tcb.erase(it);
-  }
-
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
-  
-  return err_code;
+      
+      if(joining_thread){
+        thread_scheduler->DisableInterrupt();
+        
+        // BUG: If interrupt happens right here and somehow it delete this thread --> need assumption
+        retval = joining_thread->get_retval();
+      
+        // the thread is terminated and the return value has assigned
+        // now we do not need this thread ever so we delete it immediately
+        thread_scheduler->DeleteThread(tid);
+        TOTAL_THREAD_NUMBER--;
+        
+        thread_scheduler->EnableInterrupt(TIME_SLICE);
+        return 0;
+      } else {        
+        return -1;
+      }
+  }  
 }
 
 
 // this functions is put at the end of stub function to terminate thread
-void uthread_exit(void *retval) {
-  thread_scheduler->DisableInterrupt();
-
-  TCB* running_thread = thread_scheduler->_running_queue.front();
+void uthread_exit(void *retval) {  
+  TCB* running_thread = thread_scheduler->GetCurrentThread();
 
   // set the state to TERMINATED
   // thread scheduler will remove it from running_queue
@@ -141,22 +125,21 @@ void uthread_exit(void *retval) {
   running_thread->set_retval(&retval);
 
   // thread terminated, let other threads continue
-  uthread_yield();
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
+  uthread_yield();  
 }
 
 
 
 int uthread_init(int time_slice) {
+  if(time_slice < MIN_TIME_SLICE)
+    return -1;
+  
   TIME_SLICE = time_slice;
   return 0;
 }
 
 
-int uthread_terminate(int tid) {
-  thread_scheduler->DisableInterrupt();
-
+int uthread_terminate(int tid) {  
   int err_code = 0;
 
   if (tid == 0) { // cannot terminate "main" thread
@@ -181,20 +164,15 @@ int uthread_terminate(int tid) {
     (*it)->set_state(TERMINATED);
     
     // is the thread terminating itself?
-    TCB* running_thread = thread_scheduler->_running_queue.front();
+    TCB* running_thread = thread_scheduler->GetCurrentThread();
     if (running_thread->get_thread_id() == tid)
       uthread_yield();
-  }
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
-
+  }  
   return err_code;
 }
 
 
-int uthread_suspend(int tid) {
-  thread_scheduler->DisableInterrupt();
-
+int uthread_suspend(int tid) {  
   int err_code = 0;
 
   if (tid == 0) { // cannot suspend "main" thread
@@ -224,26 +202,22 @@ int uthread_suspend(int tid) {
     }
 
     // is the thread suspending itself?
-    TCB* running_thread = thread_scheduler->_running_queue.front();
+    TCB* running_thread = thread_scheduler->GetCurrentThread();
     if (running_thread->get_thread_id() == tid)
       uthread_yield();
-  }
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
-
+  }  
   return err_code;
 }
 
 
 
-int uthread_resume(int tid) {
-  thread_scheduler->DisableInterrupt();
+int uthread_resume(int tid) {  
 
   int err_code = 0;
   int i;
 
   if (tid == 0) { // cannot resume "main" thread
-    err_code = 1;
+    err_code = -1;
     return err_code;
   }
 
@@ -260,24 +234,19 @@ int uthread_resume(int tid) {
   // cannot find thread_id in vector_tcb
   // thread_id is already terminated or doesn't exist
   if (it == thread_scheduler->_vector_tcb.end()) {
-    err_code = 1;
+    err_code = -1;
   }
   else { // only need to change state, thread scheduler will put it back to RunningQueue
     if ((*it)->get_state() == SUSPENDED)
       (*it)->set_state(READY);
-  }
-
-
-
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
+  }  
 
   return err_code;
 }
 
 
 void aio_completion_handler( int signo, siginfo_t *info, void *context ){    
-  struct aiocb *req;     
-  
+  struct aiocb *req;  
   
   /* Ensure it's our signal */
   if (info->si_signo == SIGIO) {    
@@ -305,8 +274,7 @@ ssize_t async_read(int fildes, void *buf, size_t nbytes){
   /* Set up the signal handler */
   sigemptyset(&sig_act.sa_mask);
   sig_act.sa_flags = SA_SIGINFO;
-  sig_act.sa_sigaction = aio_completion_handler;
- 
+  sig_act.sa_sigaction = aio_completion_handler; 
  
   /* Set up the AIO request */
   bzero( (char *)&my_aiocb, sizeof(struct aiocb) );
@@ -328,15 +296,16 @@ ssize_t async_read(int fildes, void *buf, size_t nbytes){
   thread_scheduler->AssignFileIdToCurrentThread(fildes);
   
   // suspend my thread immediately
-  int current_thread_id = thread_scheduler->_running_queue.front()->get_thread_id();
+  int current_thread_id = thread_scheduler->GetCurrentThread()->get_thread_id();
   uthread_suspend(current_thread_id);
 
-  return thread_scheduler->_running_queue.front()->_file_size;
+  return thread_scheduler->GetCurrentThread()->_file_size;
 }
 
 void sigalrm_handler_timeslice(int sig)
 {
-  int flag = 0;  
+  // flag in the stack to infer that the context has been safely stored
+  bool flag = 0;  
   ucontext handlercontext;
   getcontext(&handlercontext);
   
@@ -346,83 +315,45 @@ void sigalrm_handler_timeslice(int sig)
   thread_scheduler->DisableInterrupt(); 
  
   // current running thread
-  TCB* current_thread = thread_scheduler->_running_queue.front();
-  thread_scheduler->_running_queue.pop();
-  
-  current_thread->_context = handlercontext;
+  TCB* current_thread = thread_scheduler->GetCurrentThread();
+  thread_scheduler->_ready_queue.pop();  
+  current_thread->assign_context(handlercontext);
 
   // has user changed the state of this thread?
   if (current_thread->get_state() == RUNNING) {
     current_thread->set_state(READY);
     // push running thread to back of the queue
-    thread_scheduler->AddRunningQueue(current_thread);
+    thread_scheduler->AddReadyQueue(current_thread);
   }
-  else if (current_thread->get_state() == SUSPENDED)
-    thread_scheduler->AddSuspendedQueue(current_thread);
-
-
 
   // grab the next READY thread
-  TCB* next_thread = thread_scheduler->_running_queue.front();
+  TCB* next_thread = thread_scheduler->GetCurrentThread();
 
+  // iterate until getting the one is ready
   while (next_thread->get_state() != READY) {
-    thread_scheduler->_running_queue.pop();
-
-    if (next_thread->get_state() == SUSPENDED)
-      thread_scheduler->AddSuspendedQueue(next_thread);
-
-    next_thread = thread_scheduler->_running_queue.front();
-  }
-
-  next_thread->set_state(RUNNING);
-  sigemptyset(&(next_thread->_context.uc_sigmask));
-
+    thread_scheduler->_ready_queue.pop();
     
+    if(next_thread->get_state() == TERMINATED){ // here threads are those whose their thread exit is already called
+      thread_scheduler->AddTerminatedThread(next_thread);
+      TOTAL_THREAD_NUMBER--; // The interript is already disabled, so we're good.
+    } else {
+      thread_scheduler->AddReadyQueue(next_thread);
+    }
+    next_thread = thread_scheduler->GetCurrentThread();
+  }
+    
+  next_thread->set_state(RUNNING);
+  sigemptyset(&(next_thread->_context.uc_sigmask));          
+  
   flag = 1;
 
-  // this is to check if any suspended thread is terminated
-  for (int i = 0; i < thread_scheduler->_suspended_queue.size(); i++) {
-    TCB* temp_thread = thread_scheduler->_suspended_queue.front();
-    thread_scheduler->_suspended_queue.pop();
-
-    // if it is still suspended, put it back to the queue
-    // if terminated, just remove it completely
-    // uthread_join will remove the terminated thread from vector_tcb
-    if (temp_thread->get_state() == SUSPENDED)
-      thread_scheduler->AddSuspendedQueue(temp_thread);
-    else if (temp_thread->get_state() == READY) // this condition means a thread has been resumed, put it back to Running Queue
-      thread_scheduler->AddRunningQueue(temp_thread);
-  }
-
   thread_scheduler->EnableInterrupt(TIME_SLICE);
-
-  //setcontext(&(thread_scheduler->_vector_tcb[thread_scheduler->_running_thread_id]->_context));
+  
   setcontext(&(next_thread->_context));
 }
 
 
 void stub(void (*func)(void*), void *arg){  
-  (*func)(arg);    
-    
-  int i = 0;  
-  while(1){
-    i++;
-    //std::cout << "inside thread " << thread_scheduler->_running_thread_id << std::endl;
-    TCB* current_thread = thread_scheduler->_running_queue.front();
-    int tid = current_thread->get_thread_id();
-
-    std::cout << "inside thread " << tid << std::endl;
-    
-    if (tid == 9 && i == 10)
-      uthread_terminate(10);
-
-    //if (tid == 3 && i == 5)
-      //uthread_suspend(3);
-    //if (tid == 10)
-      //uthread_exit(0);
-
-    usleep(500000);
-  }
-
+  (*func)(arg);
   uthread_exit(0);
 }
