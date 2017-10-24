@@ -137,14 +137,6 @@ int ThreadScheduler::GetThreadIdFromFileId(int fileid)
 }
 
 
-int ThreadScheduler::SwitchThread(int num)
-{
-  
-}
-
-
-
-
 
 
 

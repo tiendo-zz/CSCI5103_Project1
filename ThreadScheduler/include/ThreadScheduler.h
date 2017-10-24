@@ -37,8 +37,7 @@ public:
     
     
     
-    // Once getting a context, make sure that it is stored, otherwise, repeated operation might happen
-    int SwitchThread(int num);
+    // Once getting a context, make sure that it is stored, otherwise, repeated operation might happen    
     void EnableInterrupt(unsigned int time_slice);
     void DeleteThread(int tid);
 
