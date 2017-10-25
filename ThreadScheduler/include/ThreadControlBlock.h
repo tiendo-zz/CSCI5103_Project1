@@ -28,7 +28,7 @@ enum thread_state {
 
 class TCB{
 public:
-  TCB(int thread_id):_thread_id(thread_id) {}
+  TCB(int thread_id):_thread_id(thread_id),_state(READY){}
   
   TCB(int thread_id, ucontext context):_thread_id(thread_id),
                                        _context(context),

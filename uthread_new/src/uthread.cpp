@@ -11,8 +11,8 @@ using namespace std;
 #define MAX_THREADS 1000
 #define MIN_TIME_SLICE 1000 // 1msec
 
-static unsigned int THREAD_ID;
-static unsigned int TOTAL_THREAD_NUMBER; // this variable must be atomic, when this changes, interript must be disabled
+static unsigned int THREAD_ID = 0;
+static unsigned int TOTAL_THREAD_NUMBER = 0; // this variable must be atomic, when this changes, interript must be disabled
 unsigned int TIME_SLICE = 10000; // default 10ms, user can change value using uthread_init()
 ThreadScheduler* thread_scheduler;
 
@@ -38,9 +38,12 @@ int uthread_create(void *(*start_routine)(void*), void *arg){
 
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);    
-     
-  } else if(TOTAL_THREAD_NUMBER == MAX_THREADS){
-    assert(TOTAL_THREAD_NUMBER == MAX_THREADS && "thread number reachs max. value");
+    
+    thread_scheduler->EnableInterrupt(TIME_SLICE);
+  } else {
+    if(TOTAL_THREAD_NUMBER == MAX_THREADS){
+    // assert(TOTAL_THREAD_NUMBER == MAX_THREADS && "thread number reachs max. value");
+    return -1;
   } else {    
     // disable timer interrupt
     // BUG: if a thread keeps calling thread create, no other can run, but MAX thread will partially fix it
@@ -48,15 +51,18 @@ int uthread_create(void *(*start_routine)(void*), void *arg){
     
     // Add new thread    
     TCB* new_thread = new TCB(THREAD_ID++);    TOTAL_THREAD_NUMBER++;
+    new_thread->print_context();
     thread_scheduler->AddThread(new_thread);
-    thread_scheduler->AddReadyQueue(new_thread);
-
+    thread_scheduler->AddReadyQueue(new_thread);    
+    
+    
     getcontext(&thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->_context);
     thread_scheduler->_vector_tcb[TOTAL_THREAD_NUMBER-1]->assign_context(start_routine, arg, (size_t) stub);
+    
+    // enable timer interrupt
+    thread_scheduler->EnableInterrupt(TIME_SLICE);    
   }
-
-  // enable timer interrupt
-  thread_scheduler->EnableInterrupt(TIME_SLICE);
+  }
 }
 
 
@@ -67,6 +73,8 @@ int uthread_yield(void) {
   sigalrm_handler_timeslice(1);
 
   thread_scheduler->EnableInterrupt(TIME_SLICE);
+  
+  return 0;
 }
 
 
@@ -105,7 +113,8 @@ int uthread_join(int tid, void **retval) {
         // now we do not need this thread ever so we delete it immediately
         thread_scheduler->DeleteThread(tid);
         TOTAL_THREAD_NUMBER--;
-        
+//        joining_thread->set_state(FINISHED);
+                
         thread_scheduler->EnableInterrupt(TIME_SLICE);
         return 0;
       } else {        
@@ -143,7 +152,7 @@ int uthread_terminate(int tid) {
   int err_code = 0;
 
   if (tid == 0) { // cannot terminate "main" thread
-    err_code = 1;
+    err_code = -1;
     return err_code;
   }
 
@@ -159,7 +168,7 @@ int uthread_terminate(int tid) {
   // cannot find thread_id in vector_tcb
   // thread_id is already terminated or doesn't exist
   if (it == thread_scheduler->_vector_tcb.end())
-    err_code = 1;
+    err_code = -1;
   else {
     (*it)->set_state(TERMINATED);
     
@@ -176,7 +185,7 @@ int uthread_suspend(int tid) {
   int err_code = 0;
 
   if (tid == 0) { // cannot suspend "main" thread
-    err_code = 1;
+    err_code = -1;
     return err_code;
   }
 
@@ -318,7 +327,7 @@ void sigalrm_handler_timeslice(int sig)
   TCB* current_thread = thread_scheduler->GetCurrentThread();
   thread_scheduler->_ready_queue.pop();  
   current_thread->assign_context(handlercontext);
-
+  current_thread->print_context();
   // has user changed the state of this thread?
   if (current_thread->get_state() == RUNNING) {
     current_thread->set_state(READY);
@@ -327,8 +336,9 @@ void sigalrm_handler_timeslice(int sig)
   }
 
   // grab the next READY thread
+  int i = 0;
   TCB* next_thread = thread_scheduler->GetCurrentThread();
-
+  next_thread->print_context();
   // iterate until getting the one is ready
   while (next_thread->get_state() != READY) {
     thread_scheduler->_ready_queue.pop();
@@ -336,13 +346,18 @@ void sigalrm_handler_timeslice(int sig)
     if(next_thread->get_state() == TERMINATED){ // here threads are those whose their thread exit is already called
       thread_scheduler->AddTerminatedThread(next_thread);
       TOTAL_THREAD_NUMBER--; // The interript is already disabled, so we're good.
-    } else {
+    } /*else if (next_thread->get_state() == FINISHED) {
+      thread_scheduler->DeleteThread(next_thread->get_thread_id());
+      TOTAL_THREAD_NUMBER--; // The interript is already disabled, so we're good.
+    }*/ else {
       thread_scheduler->AddReadyQueue(next_thread);
     }
     next_thread = thread_scheduler->GetCurrentThread();
+    next_thread->print_context();
   }
     
   next_thread->set_state(RUNNING);
+  
   sigemptyset(&(next_thread->_context.uc_sigmask));          
   
   flag = 1;
